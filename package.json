@@ -6,7 +6,7 @@
   "scripts": {
     "build": "next build",
     "check": "next lint && tsc --noEmit",
-    "dev": "next dev",
+    "dev": "next dev --turbo",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
     "format:write": "prettier --write \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
     "lint": "next lint",
@@ -23,6 +23,11 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "zod": "^3.24.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "tone": "13.8.25"
+    }
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
