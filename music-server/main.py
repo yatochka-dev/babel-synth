@@ -11,12 +11,11 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from google import genai
 from google.genai import types
 
-# Audio specs (kept same)
 SAMPLE_RATE = 48000
 
 app = FastAPI()
 
-# quick knobs (global mutable)
+
 TICK_HZ = 8
 TICK_INTERVAL = 1.0 / TICK_HZ
 AUDIO_QUEUE_MAX_PER_CLIENT = 10
@@ -37,7 +36,7 @@ RAW_KEYS = [
     "armRaise",
 ]
 
-# debug mode toggle
+
 DEBUG = True
 
 
@@ -53,7 +52,6 @@ def _now_s():
     return time.time()
 
 
-# minimal data models, less typing for speed
 @dataclass
 class ClientConn:
     ws: WebSocket
@@ -82,23 +80,19 @@ class Room:
     last_bpm_reset_at: float = 0.0
 
 
-# global rooms map
 ROOMS = {}
 
-# Gemini client - env var recommended
+
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY and DEBUG:
     print("[WARN] GEMINI_API_KEY not set; Lyria connect will fail later")
 
-# create even if key None - will raise at call time
+
 genai_client = genai.Client(
     api_key=GEMINI_API_KEY, http_options={"api_version": "v1alpha"}
 )
 
 
-# ----------------------------
-# Merge helpers (simple)
-# ----------------------------
 def sanitize_raw_payload(p):
     out = {}
     for k in RAW_KEYS:
@@ -106,13 +100,11 @@ def sanitize_raw_payload(p):
             try:
                 out[k] = _clamp01(float(p[k]))
             except Exception:
-                # ignore bad values
                 continue
     return out
 
 
 def merge_latest_raw(room: Room):
-    # if empty keep previous merged
     if not room.clients:
         return room.merged_raw
     acc = {k: 0.0 for k in RAW_KEYS}
@@ -137,7 +129,6 @@ def merge_latest_raw(room: Room):
 
 
 def build_lyria_prompts_and_config(merged_raw):
-    # small doc: maps 0..1 to prompts & LiveMusicGenerationConfig
     pinch = _clamp01(merged_raw.get("pinch", 0.0))
     hand_open = _clamp01(merged_raw.get("handOpen", 0.0))
     hand_h = _clamp01(merged_raw.get("handHeight", 0.0))
@@ -180,12 +171,10 @@ def build_lyria_prompts_and_config(merged_raw):
 
     prompts = []
     for text, w in prompts_raw:
-        # tiny threshold
         if w > 0.05:
             try:
                 prompts.append(types.WeightedPrompt(text=text, weight=float(w)))
             except Exception:
-                # be forgiving if types not available in this genai package version
                 prompts.append(types.WeightedPrompt(text=text, weight=float(w)))
 
     cfg = types.LiveMusicGenerationConfig(
@@ -203,7 +192,6 @@ def build_lyria_prompts_and_config(merged_raw):
 
 
 async def audio_sender_loop(client: ClientConn):
-    # keep sending until disconnected; drop exceptions and exit
     while True:
         try:
             chunk = await client.send_audio_q.get()
@@ -220,7 +208,6 @@ async def audio_sender_loop(client: ClientConn):
 
 
 def enqueue_audio(client: ClientConn, chunk: bytes):
-    # drop oldest if full
     if client.send_audio_q.full():
         try:
             _ = client.send_audio_q.get_nowait()
@@ -233,13 +220,11 @@ def enqueue_audio(client: ClientConn, chunk: bytes):
 
 
 async def broadcast_audio(room: Room, chunk: bytes):
-    # naive fanout
     for c in list(room.clients.values()):
         enqueue_audio(c, chunk)
 
 
 async def lyria_session_loop(room: Room):
-    # manages genai live session and fills room.lyria_audio_in_q
     if not GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY missing")
 
@@ -248,7 +233,6 @@ async def lyria_session_loop(room: Room):
     if DEBUG:
         print("[INFO] starting lyria_session_loop for", room.room_id)
     try:
-        # NOTE: this relies on genai_client.aio API, which may raise if not available
         async with genai_client.aio.live.music.connect(
             model="models/lyria-realtime-exp"
         ) as session:
@@ -270,7 +254,7 @@ async def lyria_session_loop(room: Room):
                         pcm = getattr(ch, "data", None)
                         if not pcm:
                             continue
-                        # drop oldest if full
+
                         if room.lyria_audio_in_q.full():
                             try:
                                 _ = room.lyria_audio_in_q.get_nowait()
@@ -280,10 +264,9 @@ async def lyria_session_loop(room: Room):
                             room.lyria_audio_in_q.put_nowait(pcm)
                         except Exception:
                             pass
-                    # yield to event loop
+
                     await asyncio.sleep(0)
     except asyncio.CancelledError:
-        # usual shutdown path
         raise
     except Exception:
         if DEBUG:
@@ -296,14 +279,12 @@ async def lyria_session_loop(room: Room):
 
 
 async def ensure_lyria_session(room: Room):
-    # start the session task if needed and wait for ready
     if room.lyria_session_task is None or room.lyria_session_task.done():
         room.lyria_session_task = asyncio.create_task(lyria_session_loop(room))
     await room.lyria_session_ready.wait()
 
 
 async def tick_loop(room: Room):
-    # start session and do initial set/play
     await ensure_lyria_session(room)
     session = room.lyria_session
 
@@ -324,7 +305,6 @@ async def tick_loop(room: Room):
     while True:
         tick_start = _now_s()
 
-        # if session died, restart & re-init
         if room.lyria_session is None:
             await ensure_lyria_session(room)
             session = room.lyria_session
@@ -340,11 +320,9 @@ async def tick_loop(room: Room):
             room.last_bpm = bpm
             room.last_bpm_reset_at = _now_s()
 
-        # merge inputs
         room.merged_raw = merge_latest_raw(room)
         prompts, cfg, bpm = build_lyria_prompts_and_config(room.merged_raw)
 
-        # apply new prompts/config each tick (docs say full config to avoid partial resets)
         try:
             await session.set_weighted_prompts(prompts=prompts)
             await session.set_music_generation_config(config=cfg)
@@ -352,7 +330,6 @@ async def tick_loop(room: Room):
             if DEBUG:
                 print("[WARN] failed to apply prompts/config:", traceback.format_exc())
 
-        # bpm hard reset policy
         tnow = _now_s()
         if (
             abs(bpm - room.last_bpm) >= BPM_CHANGE_THRESHOLD
@@ -370,7 +347,6 @@ async def tick_loop(room: Room):
                 if DEBUG:
                     print("[WARN] reset_context failed")
 
-        # drain audio and broadcast (limit per tick)
         drained = 0
         while drained < AUDIO_CHUNK_DRAIN_LIMIT:
             try:
@@ -384,7 +360,6 @@ async def tick_loop(room: Room):
                     print("[WARN] broadcast failed", traceback.format_exc())
             drained += 1
 
-        # tick pacing
         elapsed = _now_s() - tick_start
         sleep_for = TICK_INTERVAL - elapsed
         if sleep_for > 0:
@@ -407,7 +382,6 @@ def ensure_room_tasks(room: Room):
 
 
 async def shutdown_room(room: Room):
-    # stop tick and session loops
     if room.lyria_tick_task and not room.lyria_tick_task.done():
         room.lyria_tick_task.cancel()
     room.lyria_stop.set()
@@ -420,7 +394,6 @@ async def shutdown_room(room: Room):
 
 @app.websocket("/ws/{room_id}/{user_id}")
 async def ws_room(websocket: WebSocket, room_id: str, user_id: str):
-    # accept and register client
     await websocket.accept()
     room = get_room(room_id)
     client = ClientConn(ws=websocket)
@@ -431,7 +404,6 @@ async def ws_room(websocket: WebSocket, room_id: str, user_id: str):
         print("[INFO] ws connected", room_id, user_id)
     try:
         while True:
-            # expecting JSON text messages
             try:
                 txt = await websocket.receive_text()
             except WebSocketDisconnect:
@@ -444,7 +416,6 @@ async def ws_room(websocket: WebSocket, room_id: str, user_id: str):
             try:
                 data = json.loads(txt)
             except Exception:
-                # ignore bad msgs
                 continue
 
             typ = data.get("type")
@@ -460,11 +431,9 @@ async def ws_room(websocket: WebSocket, room_id: str, user_id: str):
                 except Exception:
                     pass
             else:
-                # ignore other messages for now
                 pass
 
     finally:
-        # cleanup
         try:
             sender_task.cancel()
         except Exception:
@@ -473,7 +442,6 @@ async def ws_room(websocket: WebSocket, room_id: str, user_id: str):
         if DEBUG:
             print("[INFO] ws disconnected", room_id, user_id)
         if not room.clients:
-            # last client left -> tear down
             try:
                 await shutdown_room(room)
             except Exception:
@@ -482,5 +450,4 @@ async def ws_room(websocket: WebSocket, room_id: str, user_id: str):
 
 
 if __name__ == "__main__":
-    # run local for hack demo
     uvicorn.run("main:app", host="127.0.0.1", port=5000, log_level="info")
