@@ -1,67 +1,68 @@
 "use client";
-
-import { useSearchParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { useWebRTC } from "~/hooks/useWebRTC";
-import VideoGrid from "./VideoGrid";
-import Controls from "./Controls";
+import { useUserVideo } from "~/hooks/useUserVideo.hook";
+import { useVision } from "~/hooks/useVision.hook";
+import { useAudio } from "~/hooks/useAudio.hook";
+import useMaestro from "~/hooks/useMaestro.hook";
+import { useAiMusic } from "~/hooks/useAIMusic.hook";
 
 export default function Room({ id }: { id: string }) {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const name = searchParams.get("name") ?? "Guest";
+  const { videoRef, ready, error } = useUserVideo();
+  // const { canvasRef, features, debugBlend, calibrate } = useVision(
+  // videoRef,
+  // ready,
+  // );
+  //
+  // const d = useMaestro({ features });
+  const ai = useAiMusic();
 
-  // Client-only mounting check to avoid hydration mismatch with random IDs if any
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
-  const {
-    localStream,
-    localVideoRef,
-    peers,
-    toggleMic,
-    toggleCamera,
-    isMicMuted,
-    isCameraOff,
-    error,
-  } = useWebRTC(id, name);
-
-  if (!mounted)
-    return (
-      <div className="flex h-screen items-center justify-center text-white">
-        Loading...
-      </div>
-    );
+  if (error) return <div className="p-4 text-red-600">{error}</div>;
 
   return (
-    <div className="flex min-h-screen flex-col items-center bg-[#101010] text-white">
-      <header className="flex w-full items-center justify-between bg-white/5 px-6 py-4 backdrop-blur-sm">
-        <div className="flex flex-col">
-          <h1 className="text-xl font-bold">
-            Room: <span className="text-purple-400">{id}</span>
-          </h1>
-          {error && <span className="text-xs text-red-400">{error}</span>}
-        </div>
-        <div className="text-sm opacity-70">Logged in as: {name}</div>
-      </header>
+    <div className="p-4">
+      <h2 className="text-lg font-semibold">Room {id}</h2>
 
-      <main className="flex w-full flex-1 flex-col items-center justify-center overflow-hidden">
-        <VideoGrid
-          localStream={localStream}
-          localVideoRef={localVideoRef}
-          peers={peers}
-          isMicMuted={isMicMuted}
-          userName={name}
+      {/*<div className="relative mt-4 w-full max-w-5xl">
+        <video
+          ref={videoRef}
+          className="w-full rounded border"
+          muted
+          playsInline
+          autoPlay
         />
-      </main>
+        <canvas
+          ref={canvasRef}
+          className="pointer-events-none absolute top-0 left-0 h-full w-full"
+        />
+      </div>*/}
 
-      <Controls
-        isMicMuted={isMicMuted}
-        isCameraOff={isCameraOff}
-        onToggleMic={toggleMic}
-        onToggleCamera={toggleCamera}
-        onLeave={() => router.push("/")}
-      />
+      <div>
+        <button onClick={ai.init} className="rounded border px-3 py-1 text-sm">
+          Init AI Music
+        </button>
+
+        <button
+          disabled={ai.status !== "ready"}
+          onClick={() => ai.generateAndPlay()}
+          className="rounded border px-3 py-1 text-sm disabled:opacity-50"
+        >
+          Generate + Play (2 bars)
+        </button>
+
+        <button onClick={ai.stop} className="rounded border px-3 py-1 text-sm">
+          Stop
+        </button>
+
+        {ai.error ? <div className="text-red-600">{ai.error}</div> : null}
+      </div>
+
+      {/*<pre className="mt-3 text-xs opacity-80">
+        {JSON.stringify(features, null, 2)}
+      </pre>
+      <pre className="mt-3 text-xs opacity-70">
+        {debugBlend.length
+          ? JSON.stringify(debugBlend, null, 2)
+          : "blend: (empty)"}
+      </pre>*/}
     </div>
   );
 }
