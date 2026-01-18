@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   DrawingUtils,
   FaceLandmarker,
@@ -48,9 +48,9 @@ export function useVision(
     armRaise: 0,
   });
 
-  const calibrate = () => {
+  const calibrate = useCallback(() => {
     if (smoothRef.current) baselineRef.current = { ...smoothRef.current };
-  };
+  }, []);
 
   useEffect(() => {
     if (!enabled) return;
@@ -66,7 +66,6 @@ export function useVision(
     let lastFace = 0;
     let lastUi = 0;
 
-    // latest results (kept outside React state)
     let lastHands: Pt[][] = [];
     let lastPose: Pt[] | null = null;
     let lastBlend: Array<{ name: string; score: number }> = [];
@@ -185,8 +184,6 @@ export function useVision(
           draw.drawLandmarks(points as any, { radius: 2 });
         }
 
-        // features (pure funcs)
-        // compute raw from latest detections
         const raw: FeatureState = {
           ...computeHandFeatures(lastHands),
           ...computeFaceFeatures(lastBlend),
@@ -214,11 +211,9 @@ export function useVision(
           };
         }
 
-        // update UI at ~10fps (throttled)
         if (now - lastUi >= 100) {
           lastUi = now;
 
-          // normalize vs baseline and clamp
           const b = baselineRef.current;
           const s = smoothRef.current ?? raw; // fallback in case
 

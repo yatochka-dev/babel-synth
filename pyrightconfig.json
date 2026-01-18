@@ -1,6 +1,6 @@
 {
   "venvPath": ".",
-  "venv": ".venv",
+  "venv": "music-server/.venv",
   "pythonVersion": "3.11",
   "typeCheckingMode": "basic",
 }
