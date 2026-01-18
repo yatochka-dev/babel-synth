@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   DrawingUtils,
   FaceLandmarker,
@@ -48,9 +48,9 @@ export function useVision(
     armRaise: 0,
   });
 
-  const calibrate = () => {
+  const calibrate = useCallback(() => {
     if (smoothRef.current) baselineRef.current = { ...smoothRef.current };
-  };
+  }, []);
 
   useEffect(() => {
     if (!enabled) return;
