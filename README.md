@@ -1,6 +1,6 @@
-# Babel Synth — Technical Architecture
+# Babel Synth - Technical Architecture
 
-Babel Synth is an experimental 2 day hackathon project combining **real-time computer vision**, **generative music**, and **peer-to-peer voice chat**.
+Babel Synth is an experimental project made during a 2 day hackathon competition, combining **real-time computer vision**, **generative music**, and **peer-to-peer voice chat**.
 Two users join a room, their body/face motion is tracked live, and those features drive an AI music model that streams raw audio back into the browser.
 
 ## System Overview
